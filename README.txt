@@ -1,15 +1,24 @@
-KOZENI — DASHBOARD SUMMARY FINAL
+KOZENI — ASSET PILIHAN A FIX
 
 Perubahan:
-- Insight & Reports card yang duplikat sudah dihapus.
-- Expense Distribution sudah dihapus.
-- Rasio Menabung tidak lagi muncul di Ringkasan.
-- Ringkasan sekarang berisi:
-  1. Arus Kas
-  2. Total Budget
-  3. Total Aset
-- Total Aset = Account Balance + aset non-akun sesuai periode.
-- Native Backup Export Fix tetap ikut.
-- GitHub Actions APK builder tetap ikut.
+1. Asset Breakdown hanya menampilkan aset manual/non-akun.
+   - Tabungan/Account Balance tidak lagi tampil di donut.
+   - Jumlah Aset dan jumlah komponen donut sekarang konsisten.
 
-Siap upload/replace ke repo GitHub Kozeni.
+2. Asset masuk ke Transaksi.
+   - Tambah aset -> otomatis membuat record Transaksi tipe Aset.
+   - Edit aset -> record transaksi aset ikut diperbarui.
+   - Hapus aset -> record transaksi aset ikut dihapus.
+   - Aset lama yang sudah tersimpan otomatis dibuatkan record transaksi saat aplikasi dibuka.
+   - Filter Transaksi > Aset sekarang menampilkan aset.
+
+3. Net Worth tetap benar:
+   Net Worth = Account Balance + Asset Balance.
+   Tabungan tidak double count.
+
+Build ini tetap membawa:
+- Ringkasan final
+- Insight duplikat sudah dihapus
+- Expense Distribution sudah dihapus
+- Native Backup JSON fix
+- GitHub Actions APK builder

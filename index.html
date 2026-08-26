@@ -2407,11 +2407,11 @@ function renderAssets(){
   goldGrams.textContent=(Math.round(grams*100)/100)+" gr";
   investmentValue.textContent=money(invest);
 
-  // Breakdown Net Worth harus konsisten dengan total:
-  // Account Balance ditampilkan sebagai "saving" di breakdown,
-  // tetapi tetap TIDAK ditambahkan lagi ke Asset Balance.
+  // PILIHAN A:
+  // Breakdown hanya menampilkan aset manual/non-akun.
+  // Tabungan/account balance tetap menjadi bagian Net Worth,
+  // tetapi tidak masuk ke Asset Breakdown agar konsisten dengan "Jumlah Aset".
   const typeMap={};
-  if(accountBalance>0) typeMap.saving=accountBalance;
   list.forEach(a=>typeMap[a.type]=(typeMap[a.type]||0)+(Number(a.currentValue)||0));
   const total=Object.values(typeMap).reduce((s,v)=>s+v,0);
   if(!total){assetBreakdown.innerHTML='<div class="activity-empty">Belum ada aset pada periode ini.</div>'}
@@ -2458,8 +2458,59 @@ function openAssetHistory(id){
   assetHistoryModal.classList.add("show");
 }
 
+
+function assetTransactionId(assetId){
+  return Number("8"+String(assetId).slice(-12));
+}
+function syncAssetTransaction(asset){
+  if(!asset) return;
+  const existingIndex=data.transactions.findIndex(t=>t.type==="asset" && Number(t.assetRefId)===Number(asset.id));
+  const record={
+    id: existingIndex>=0 ? data.transactions[existingIndex].id : assetTransactionId(asset.id),
+    type:"asset",
+    recordType:"asset",
+    assetRefId:asset.id,
+    name:asset.name,
+    amount:Number(asset.currentValue||0),
+    date:asset.date||today(),
+    category:asset.category||assetTypeLabel(asset.type),
+    account:"Aset",
+    note:asset.note||""
+  };
+  if(existingIndex>=0) data.transactions[existingIndex]={...data.transactions[existingIndex],...record};
+  else data.transactions.push(record);
+}
+function removeAssetTransaction(assetId){
+  data.transactions=data.transactions.filter(t=>!(t.type==="asset" && Number(t.assetRefId)===Number(assetId)));
+}
+function ensureAssetTransactions(){
+  let changed=false;
+  for(const asset of (data.assets||[])){
+    const idx=data.transactions.findIndex(t=>t.type==="asset" && Number(t.assetRefId)===Number(asset.id));
+    if(idx<0){
+      syncAssetTransaction(asset);
+      changed=true;
+    }
+  }
+  // Remove orphan asset history records if their asset was deleted.
+  const assetIds=new Set((data.assets||[]).map(a=>Number(a.id)));
+  const before=data.transactions.length;
+  data.transactions=data.transactions.filter(t=>t.type!=="asset" || !t.assetRefId || assetIds.has(Number(t.assetRefId)));
+  if(data.transactions.length!==before) changed=true;
+  if(changed) save();
+}
+
 function editAsset(id){const a=data.assets.find(x=>x.id===id);if(a)openAssetForm(a.type,id)}
-function deleteAsset(id){if(!confirm("Hapus asset ini?"))return;data.assets=data.assets.filter(a=>a.id!==id);save();renderAssets();renderHome();toastMsg("Asset dihapus")}
+function deleteAsset(id){
+  if(!confirm("Hapus asset ini?")) return;
+  data.assets=data.assets.filter(a=>a.id!==id);
+  removeAssetTransaction(id);
+  save();
+  refreshTxSelectors();
+  renderAssets();
+  renderHome();
+  toastMsg("Asset dihapus");
+}
 assetForm.addEventListener("submit",e=>{
   e.preventDefault();const type=assetType.value,name=assetName.value.trim();if(!name)return toastMsg("Nama asset wajib diisi");
   const id=assetEditId.value?Number(assetEditId.value):Date.now();let obj={id,type,name,date:assetDate.value||today(),category:assetCategory.value,note:assetNote.value.trim()};
@@ -2475,7 +2526,12 @@ assetForm.addEventListener("submit",e=>{
     obj.history=[{date:obj.date||today(),value:Number(obj.currentValue||0)}];
     data.assets.push(obj);
   }
-  save();closeModal("assetFormModal");switchView("assets");toastMsg("Asset tersimpan");
+  syncAssetTransaction(obj);
+  save();
+  refreshTxSelectors();
+  closeModal("assetFormModal");
+  switchView("assets");
+  toastMsg("Asset tersimpan");
 });
 function renderHomeWishlist(){
   const list=data.wishlist||[];
@@ -2987,6 +3043,8 @@ function txEmoji(tx){
   if(tx.type==="saving" && tx.recordType==="opening") return "🏦";
   if(t.includes("dana darurat")||t.includes("saving")) return "💰";
   if(t.includes("transfer")) return "⇄";
+  if(tx.type==="asset" && (t.includes("emas")||t.includes("logam"))) return "🪙";
+  if(tx.type==="asset") return "◆";
   if(tx.type==="income") return "↙";
   if(tx.type==="expense") return "↗";
   if(tx.type==="saving") return "◎";
@@ -3028,13 +3086,19 @@ function renderTransactions(){
   transactionList.innerHTML=list.map(tx=>{
     let header="";
     if(tx.date!==lastDate){ lastDate=tx.date; header=`<div class="tx-date-title">${formatDateID(tx.date)}</div>`; }
-    const sign=(tx.type==="income" || (tx.type==="saving"&&tx.recordType==="opening"))?"+":"-";
+    const sign=tx.type==="asset"?"":((tx.type==="income" || (tx.type==="saving"&&tx.recordType==="opening"))?"+":"-");
     return `${header}
       <div class="tx-item" onclick="openEditTx(${tx.id})">
         <div class="tx-icon ${tx.type}">${txEmoji(tx)}</div>
         <div class="tx-main">
           <div class="tx-name">${esc(tx.name)}</div>
-          <div class="tx-meta">${tx.type==="saving"&&tx.recordType==="opening"?(langCode()==="en"?"Starting Balance":"Saldo Awal"):esc(tx.category)} • ${esc(tx.account)}</div>
+          <div class="tx-meta">${
+            tx.type==="saving"&&tx.recordType==="opening"
+              ? (langCode()==="en"?"Starting Balance":"Saldo Awal")
+              : tx.type==="asset"
+                ? `${langCode()==="en"?"Asset":"Aset"} • ${esc(tx.category)}`
+                : `${esc(tx.category)} • ${esc(tx.account)}`
+          }</div>
         </div>
         <div class="tx-amount ${tx.type}">${sign}${money(tx.amount)}</div>
       </div>`;
@@ -3421,7 +3485,10 @@ function importData(e){
       data=JSON.parse(r.result);
       data.budgets ||= []; data.transfers ||= [];
 data.wishlist ||= []; data.transactions ||= []; data.categories ||= []; data.accounts ||= [];
-      save(); data.goals ||= []; data.debts ||= []; data.assets ||= []; data.profile ||= {}; data.assets.forEach(a=>{a.history ||= [{date:a.date||new Date().toISOString().slice(0,10),value:Number(a.currentValue||0)}]});
+      data.goals ||= []; data.debts ||= []; data.assets ||= []; data.profile ||= {};
+      data.assets.forEach(a=>{a.history ||= [{date:a.date||new Date().toISOString().slice(0,10),value:Number(a.currentValue||0)}]});
+      ensureAssetTransactions();
+      save();
 fillSettings();
 syncAvatarUI(); populateFormSelects(); refreshTxSelectors(); renderTransactions();
       toastMsg("Backup berhasil diimport");
@@ -3431,6 +3498,7 @@ syncAvatarUI(); populateFormSelects(); refreshTxSelectors(); renderTransactions(
 }
 
 normalizeRecordTypes();
+ensureAssetTransactions();
 fillSettings();
 applyLanguage();
 updateSavingFormMode();

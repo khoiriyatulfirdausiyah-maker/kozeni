@@ -1,4 +1,4 @@
-const CACHE_NAME = "kozeni-dashboard-summary-final-v1";
+const CACHE_NAME = "kozeni-asset-option-a-v1";
 const APP_SHELL = ["./","./index.html","./manifest.json","./icon-192.png","./icon-512.png"];
 self.addEventListener("install",event=>{
   event.waitUntil(caches.open(CACHE_NAME).then(cache=>cache.addAll(APP_SHELL)));
