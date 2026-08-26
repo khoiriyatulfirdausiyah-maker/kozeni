@@ -1,0 +1,6 @@
+{
+  "appId": "com.kozeni.finance",
+  "appName": "Kozeni",
+  "webDir": "www",
+  "bundledWebRuntime": false
+}
