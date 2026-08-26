@@ -953,6 +953,17 @@ html, body{
   }
 }
 
+
+/* Ringkasan final: Cash Flow, Budget, Assets */
+@media(max-width:520px){
+  .compact-summary{
+    grid-template-columns:1fr 1fr;
+  }
+  .compact-summary-item:last-child{
+    grid-column:1 / -1;
+  }
+}
+
 </style>
 </head>
 <body>
@@ -1006,9 +1017,7 @@ html, body{
     <button class="mini-home-card" onclick="switchView('debt')">
       <span>Debt / PayLater</span><b id="homeDebtMini">Rp0</b><div class="sub">Sisa kewajiban →</div>
     </button>
-    <button class="mini-home-card" onclick="switchView('reports')">
-      <span>Insight & Reports</span><b id="homeInsightMini">Lihat analisis</b><div class="sub">Ringkasan otomatis →</div>
-    </button>
+
   </div>
 
   <div class="home-grid">
@@ -1025,7 +1034,7 @@ html, body{
   </div>
   <div id="expenseActivityChart"></div>
 </div>
-      <div class="home-block"><div class="block-head"><h3>Expenses Distribution</h3><button class="link-btn" onclick="openAddForm('expense')">+ Expense</button></div><div id="expenseDistribution"></div></div>
+
       <div class="home-block"><div class="block-head"><h3>Income by Category</h3><button class="link-btn" onclick="openAddForm('income')">+ Income</button></div><div id="incomeCategoryChart"></div></div>
       <div class="home-block"><div class="block-head"><h3>Budget Summary</h3><button class="link-btn" onclick="switchView('budget')">Lihat semua</button></div><div class="budget-summary-grid" id="homeBudgetList"></div></div>
     </div>
@@ -1058,8 +1067,8 @@ html, body{
   <div class="block-head"><h3>Ringkasan</h3><button class="link-btn" onclick="switchView('reports')">Detail</button></div>
   <div class="compact-summary">
     <div class="compact-summary-item"><span>Arus kas</span><b id="homeCashflow">Rp0</b></div>
-    <div class="compact-summary-item"><span>Rasio menabung</span><b id="homeSaveRate">0%</b></div>
     <div class="compact-summary-item"><span>Total budget</span><b id="homeBudgetTotal">Rp0</b></div>
+    <div class="compact-summary-item"><span>Total aset</span><b id="homeAssetsTotal">Rp0</b></div>
   </div>
 </div>
 
@@ -2115,7 +2124,7 @@ const UI_ID_TO_EN={
   "Kondisi Keuangan":"Financial Health",
   "Transaksi Terbaru":"Recent Transactions",
   "Ringkasan":"Summary",
-  "Arus kas":"Cash Flow",
+  "Arus kas":"Cash Flow","Total aset":"Total Assets",
   "Rasio menabung":"Saving Rate",
   "Total budget":"Total Budget",
   "Periode terpilih":"Selected period",
@@ -2744,23 +2753,27 @@ function renderHome(){
   const cutoff=`${year}-${lastDay}`;
   const endBalance=totalAccountBalanceAt(cutoff);
   const savingsBalance=totalSavingsBalanceAt(cutoff);
+  const nonAccountAssets=(data.assets||[])
+    .filter(a=>!cutoff || !(a.date||"") || (a.date||"")<=cutoff)
+    .reduce((s,a)=>s+Number(a.currentValue||0),0);
+  const totalAssetsSummary=endBalance+nonAccountAssets;
 
   const name=(data.profile.displayName||"Kozeni").trim();homeName.textContent=name;syncAvatarUI();
   const hour=new Date().getHours();homeGreeting.textContent=hour<11?tr("morning"):hour<15?tr("noon"):hour<18?tr("afternoon"):tr("evening");
 
   homeBalance.textContent=money(endBalance);homeIncome.textContent=money(totalIncome);homeExpense.textContent=money(totalExpense);homeSaving.textContent=money(savingsBalance);
   
-  homeCashflow.textContent=money(totalIncome-totalExpense);homeSaveRate.textContent=totalIncome?Math.round(totalSaving/totalIncome*100)+"%":"0%";
+  homeCashflow.textContent=money(totalIncome-totalExpense);if(window.homeSaveRate)homeSaveRate.textContent=totalIncome?Math.round(totalSaving/totalIncome*100)+"%":"0%";
   const currentKey=(month==="all"?`${year}-${String(new Date().getMonth()+1).padStart(2,"0")}`:`${year}-${month}`);
   const monthBudgets=data.budgets.filter(b=>b.month===currentKey);
   homeBudgetMini.textContent=money(monthBudgets.reduce((s,b)=>s+b.amount,0));
   homeGoalMini.textContent=`${data.goals.length} ${langCode()==="en"?"goals":"target"}`;
   homeDebtMini.textContent=money(data.debts.reduce((s,d)=>s+Math.max(0,d.total-d.paid),0));
   const insights=buildInsights(tx);
-  if(insights.length){homeInsightTitle.textContent=insights[0].title;homeInsightText.textContent=insights[0].text;homeInsightMini.textContent=insights[0].title}
-  else{homeInsightTitle.textContent="Belum ada insight";homeInsightText.textContent="Tambah transaksi untuk mendapatkan analisis otomatis.";homeInsightMini.textContent="Lihat analisis"}
+  if(insights.length){homeInsightTitle.textContent=insights[0].title;homeInsightText.textContent=insights[0].text;if(window.homeInsightMini)homeInsightMini.textContent=insights[0].title}
+  else{homeInsightTitle.textContent="Belum ada insight";homeInsightText.textContent="Tambah transaksi untuk mendapatkan analisis otomatis.";if(window.homeInsightMini)homeInsightMini.textContent="Lihat analisis"}
 
-  renderExpenseActivity();renderExpenseDistribution(expenses);renderIncomeByCategory(incomes);
+  renderExpenseActivity();renderIncomeByCategory(incomes);
 
   let score=0;if(totalIncome>0){score=60;const er=totalExpense/totalIncome,sr=totalSaving/totalIncome;if(er<=.7)score+=20;else if(er<=.9)score+=10;if(sr>=.2)score+=20;else if(sr>=.1)score+=10;score=Math.min(100,score)}
   healthScore.textContent=score;healthScoreCircle.style.background=`conic-gradient(var(--mint) ${score*3.6}deg,#dcebe6 0deg)`;
@@ -2771,6 +2784,7 @@ function renderHome(){
 
   const budgets=data.budgets.filter(b=>(b.month||"").startsWith(year)&&(month==="all"||b.month.slice(5,7)===month));
   homeBudgetTotal.textContent=money(budgets.reduce((s,b)=>s+b.amount,0));
+  if(window.homeAssetsTotal) homeAssetsTotal.textContent=money(totalAssetsSummary);
   if(!budgets.length){
     homeBudgetList.innerHTML='<div class="empty-mini">'+tr("noBudget")+'</div>';
   }else{
@@ -3350,24 +3364,37 @@ document.addEventListener("click",e=>{
 });
 
 async function exportData(){
-  try{
-    const json=JSON.stringify(data,null,2);
-    const filename="kozeni-backup-"+new Date().toISOString().slice(0,10)+".json";
-    const file=new File([json],filename,{type:"application/json"});
+  const json=JSON.stringify(data,null,2);
+  const filename="kozeni-backup-"+new Date().toISOString().slice(0,10)+".json";
 
-    // Android APK / modern mobile browsers:
-    // open the native Share sheet, where the JSON can be saved/sent.
-    if(navigator.share && (!navigator.canShare || navigator.canShare({files:[file]}))){
-      await navigator.share({
-        title:"Kozeni Backup",
-        text:"Backup data Kozeni",
-        files:[file]
+  try{
+    const Cap=window.Capacitor;
+    const isNative=!!(Cap && typeof Cap.isNativePlatform==="function" && Cap.isNativePlatform());
+
+    if(isNative && Cap.Plugins?.Filesystem && Cap.Plugins?.Share){
+      const Filesystem=Cap.Plugins.Filesystem;
+      const Share=Cap.Plugins.Share;
+
+      const saved=await Filesystem.writeFile({
+        path:filename,
+        data:json,
+        directory:"CACHE",
+        encoding:"utf8",
+        recursive:true
       });
-      toastMsg("Backup siap disimpan/dibagikan");
+
+      await Share.share({
+        title:"Backup Kozeni",
+        text:"Backup data Kozeni",
+        files:[saved.uri],
+        dialogTitle:"Simpan / Bagikan Backup Kozeni"
+      });
+
+      toastMsg("Pilih tempat untuk menyimpan backup");
       return;
     }
 
-    // Normal desktop/mobile browser fallback.
+    // Web/PWA fallback
     const blob=new Blob([json],{type:"application/json"});
     const url=URL.createObjectURL(blob);
     const a=document.createElement("a");
@@ -3382,17 +3409,9 @@ async function exportData(){
     },1500);
     toastMsg("Backup JSON diexport");
   }catch(err){
-    // User cancelling the Android share sheet isn't a real error.
-    if(err && (err.name==="AbortError" || String(err).includes("canceled"))) return;
-
-    // Last-resort fallback: copy the JSON so the data is never trapped.
-    try{
-      const json=JSON.stringify(data,null,2);
-      await navigator.clipboard.writeText(json);
-      toastMsg("Download tidak didukung. Backup disalin ke clipboard.");
-    }catch(_){
-      toastMsg("Export belum didukung di perangkat ini");
-    }
+    if(err && (err.name==="AbortError" || String(err).toLowerCase().includes("cancel"))) return;
+    console.error("Kozeni export error:",err);
+    toastMsg("Export gagal. Coba lagi.");
   }
 }
 function importData(e){
