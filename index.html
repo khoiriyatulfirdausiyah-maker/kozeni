@@ -863,6 +863,96 @@ button, a, label, select, input, .nav, .menu-item, .soft-btn, .mini-home-card {
 /* Budget edit/delete */
 #budgetPageList .goal-actions{margin-top:10px;display:flex;gap:8px;flex-wrap:wrap}
 #budgetPageList .goal-actions button{min-width:76px}
+
+/* FIX: prevent cards/content from overflowing horizontally on phones */
+html, body{
+  width:100%;
+  max-width:100%;
+  overflow-x:hidden !important;
+}
+.app,
+.view,
+.home-grid,
+.home-block,
+.section,
+.panel,
+.health-card,
+.insight-card,
+.recent-list,
+.compact-summary,
+.compact-summary-item{
+  min-width:0;
+  max-width:100%;
+}
+.app{
+  overflow-x:hidden;
+}
+.home-grid > *,
+.health-card > *,
+.block-head > *,
+.recent-item > *{
+  min-width:0;
+}
+.health-text{
+  min-width:0;
+  overflow:hidden;
+}
+.health-text b,
+.health-text p,
+.insight-card b,
+.insight-card p{
+  max-width:100%;
+  white-space:normal !important;
+  overflow-wrap:anywhere;
+  word-break:normal;
+}
+.home-block{
+  overflow:hidden;
+}
+.compact-summary{
+  width:100%;
+}
+.compact-summary-item{
+  overflow:hidden;
+}
+.compact-summary-item b,
+.compact-summary-item span{
+  overflow-wrap:anywhere;
+}
+
+@media(max-width:520px){
+  .app{
+    width:100%;
+    padding-left:12px;
+    padding-right:12px;
+  }
+  .home-grid{
+    grid-template-columns:minmax(0,1fr) !important;
+  }
+  .health-card{
+    grid-template-columns:64px minmax(0,1fr);
+    gap:12px;
+  }
+  .health-score{
+    width:60px;
+    height:60px;
+  }
+  .health-score:after{
+    width:42px;
+    height:42px;
+  }
+  .health-text b{
+    font-size:14px;
+  }
+  .health-text p{
+    font-size:11px;
+    line-height:1.45;
+  }
+  .home-block{
+    padding:14px;
+  }
+}
+
 </style>
 </head>
 <body>
@@ -1143,7 +1233,7 @@ button, a, label, select, input, .nav, .menu-item, .soft-btn, .mini-home-card {
         <div><h2>Backup & Data</h2><p>Simpan salinan data Kozeni</p></div>
       </div>
       <div class="grid">
-        <button class="secondary" onclick="exportData()">Export Backup JSON</button>
+        <button class="secondary" onclick="exportData()">Export / Bagikan Backup JSON</button>
         <button class="secondary" onclick="importFile.click()">Import Backup</button>
         <input id="importFile" type="file" accept=".json" style="display:none" onchange="importData(event)">
       </div>
@@ -3259,10 +3349,51 @@ document.addEventListener("click",e=>{
   }
 });
 
-function exportData(){
-  const blob = new Blob([JSON.stringify(data,null,2)], {type:"application/json"});
-  const url = URL.createObjectURL(blob), a=document.createElement("a");
-  a.href=url; a.download="kozeni-backup.json"; a.click(); URL.revokeObjectURL(url);
+async function exportData(){
+  try{
+    const json=JSON.stringify(data,null,2);
+    const filename="kozeni-backup-"+new Date().toISOString().slice(0,10)+".json";
+    const file=new File([json],filename,{type:"application/json"});
+
+    // Android APK / modern mobile browsers:
+    // open the native Share sheet, where the JSON can be saved/sent.
+    if(navigator.share && (!navigator.canShare || navigator.canShare({files:[file]}))){
+      await navigator.share({
+        title:"Kozeni Backup",
+        text:"Backup data Kozeni",
+        files:[file]
+      });
+      toastMsg("Backup siap disimpan/dibagikan");
+      return;
+    }
+
+    // Normal desktop/mobile browser fallback.
+    const blob=new Blob([json],{type:"application/json"});
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement("a");
+    a.href=url;
+    a.download=filename;
+    a.style.display="none";
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(()=>{
+      URL.revokeObjectURL(url);
+      a.remove();
+    },1500);
+    toastMsg("Backup JSON diexport");
+  }catch(err){
+    // User cancelling the Android share sheet isn't a real error.
+    if(err && (err.name==="AbortError" || String(err).includes("canceled"))) return;
+
+    // Last-resort fallback: copy the JSON so the data is never trapped.
+    try{
+      const json=JSON.stringify(data,null,2);
+      await navigator.clipboard.writeText(json);
+      toastMsg("Download tidak didukung. Backup disalin ke clipboard.");
+    }catch(_){
+      toastMsg("Export belum didukung di perangkat ini");
+    }
+  }
 }
 function importData(e){
   const f=e.target.files[0]; if(!f) return;

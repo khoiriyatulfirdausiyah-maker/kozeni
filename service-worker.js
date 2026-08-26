@@ -1,4 +1,4 @@
-const CACHE_NAME = "kozeni-asset-breakdown-savings-v2";
+const CACHE_NAME = "kozeni-mobile-export-fix-v1";
 const APP_SHELL = ["./","./index.html","./manifest.json","./icon-192.png","./icon-512.png"];
 self.addEventListener("install",event=>{
   event.waitUntil(caches.open(CACHE_NAME).then(cache=>cache.addAll(APP_SHELL)));
