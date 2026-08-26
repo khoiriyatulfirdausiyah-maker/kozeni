@@ -1,0 +1,63 @@
+name: Build Kozeni APK
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  build-android:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: "temurin"
+          java-version: "21"
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Prepare web files
+        run: |
+          rm -rf www
+          mkdir -p www
+          cp index.html www/
+          [ -f manifest.json ] && cp manifest.json www/ || true
+          [ -f service-worker.js ] && cp service-worker.js www/ || true
+          [ -f icon-192.png ] && cp icon-192.png www/ || true
+          [ -f icon-512.png ] && cp icon-512.png www/ || true
+          [ -f logo-kozeni.png ] && cp logo-kozeni.png www/ || true
+
+      - name: Create Android project
+        run: npx cap add android
+
+      - name: Sync Capacitor
+        run: npx cap sync android
+
+      - name: Build Debug APK
+        run: |
+          cd android
+          chmod +x gradlew
+          ./gradlew assembleDebug
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: Kozeni-APK
+          path: android/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
